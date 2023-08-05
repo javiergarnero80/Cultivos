@@ -1,0 +1,62 @@
+import time
+import pandas as pd
+from geopy.geocoders import Nominatim
+from tqdm import tqdm
+import random
+
+geolocator = Nominatim(user_agent="my_app")
+
+def obtener_longitud_latitud(direccion):
+    location = None
+    retries = 0
+    while not location and retries < 5:  # Increase the maximum number of retries
+        try:
+            location = geolocator.geocode(direccion, timeout=10)  # Increase the timeout duration
+        except (TimeoutError, ConnectionError) as e:
+            print(f"Error de conexión: {str(e)}. Reintentando en {2**retries} segundos...")
+            time.sleep(2**retries + random.uniform(0, 1))
+            retries += 1
+        except Exception as e:
+            print(f"Error desconocido: {str(e)}. Reintentando en {2**retries} segundos...")
+            time.sleep(2**retries + random.uniform(0, 1))
+            retries += 1
+    if location:
+        return location.longitude, location.latitude
+    else:
+        return None, None
+
+
+
+# Leer el archivo CSV
+df = pd.read_csv("/home/jlinux/Escritorio/archivo2.csv", sep=";", encoding="ISO-8859-1")
+
+print(df.columns)
+
+# Crear una barra de progreso
+total_rows = len(df)
+progress_bar = tqdm(total=total_rows, desc="Geocodificación", unit="row")
+
+# Iterar sobre las filas del DataFrame
+for index, row in df.iterrows():
+    provincia = row["Provincia"]
+    departamento = row["Departamento"]
+
+    # Construir la dirección utilizando los datos de provincia y departamento
+    direccion = f"{departamento}, {provincia}, Argentina"
+
+    # Obtener longitud y latitud para la dirección
+    longitud, latitud = obtener_longitud_latitud(direccion)
+
+    # Actualizar los valores en el DataFrame si se obtuvieron las coordenadas
+    if longitud and latitud:
+        df.at[index, "Longitud"] = longitud
+        df.at[index, "Latitud"] = latitud
+
+    # Actualizar la barra de progreso
+    progress_bar.update(1)
+
+# Cerrar la barra de progreso
+progress_bar.close()
+
+# Guardar el DataFrame actualizado en un nuevo archivo CSV
+df.to_csv("/home/jlinux/Escritorio/salida.coordenadas.csv", index=False)
